@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 
+### Added
+- Popover-only Codex Spark usage card when Codex usage is available.
+- Remaining percentage display options for the menu bar and popover.
+
 ## [1.1.0] - 2026-04-07
 
 ### Added

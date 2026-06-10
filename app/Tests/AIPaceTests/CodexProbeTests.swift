@@ -27,6 +27,32 @@ struct CodexProbeTests {
     }
 
     @Test
+    func parseSparkRateLimitsFindsSparkLimitByName() {
+        let probe = CodexProbe()
+        let limits = probe.parseSparkRateLimits([
+            "rateLimitsByLimitId": [
+                "codex": [
+                    "limitName": NSNull(),
+                    "primary": ["usedPercent": 4],
+                    "secondary": ["usedPercent": 3],
+                    "planType": "pro",
+                ],
+                "codex_bengalfox": [
+                    "limitName": "GPT-5.3-Codex-Spark",
+                    "primary": ["usedPercent": 1, "resetsAt": 1_710_000_000],
+                    "secondary": ["usedPercent": 5],
+                    "planType": "pro",
+                ],
+            ],
+        ])
+
+        #expect(limits?.limitName == "GPT-5.3-Codex-Spark")
+        #expect(limits?.primary?.usedPercent == 1)
+        #expect(limits?.primary?.resetsAt == Date(timeIntervalSince1970: 1_710_000_000))
+        #expect(limits?.secondary?.usedPercent == 5)
+    }
+
+    @Test
     func readResponseReturnsMatchingPayload() async throws {
         let stream = AsyncStream<String> { continuation in
             continuation.yield("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"ignored\":true}}")

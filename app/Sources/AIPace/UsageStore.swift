@@ -12,6 +12,7 @@ extension CodexProbe: ProviderSnapshotFetching {}
 final class UsageStore: ObservableObject {
     @Published var claude = ProviderSnapshot.loading(.claude)
     @Published var codex = ProviderSnapshot.loading(.codex)
+    @Published var codexSpark = ProviderSnapshot.loading(.codexSpark)
     @Published var lastUpdated: Date?
     @Published var isRefreshing = false
     @Published private(set) var refreshNotificationKeys: Set<String>
@@ -23,6 +24,7 @@ final class UsageStore: ObservableObject {
 
     private let claudeProbe: any ProviderSnapshotFetching
     private let codexProbe: any ProviderSnapshotFetching
+    private let codexSparkProbe: any ProviderSnapshotFetching
     private let notificationManager: any NotificationManaging
     private let launchAtStartupManager: any LaunchAtStartupManaging
     private let userDefaults: UserDefaults
@@ -35,6 +37,7 @@ final class UsageStore: ObservableObject {
     init(
         claudeProbe: any ProviderSnapshotFetching = ClaudeProbe(),
         codexProbe: any ProviderSnapshotFetching = CodexProbe(),
+        codexSparkProbe: any ProviderSnapshotFetching = CodexSparkProbe(),
         notificationManager: any NotificationManaging = NotificationManager(),
         launchAtStartupManager: any LaunchAtStartupManaging = LaunchAtStartupManager(),
         userDefaults: UserDefaults = .standard,
@@ -42,6 +45,7 @@ final class UsageStore: ObservableObject {
     ) {
         self.claudeProbe = claudeProbe
         self.codexProbe = codexProbe
+        self.codexSparkProbe = codexSparkProbe
         self.notificationManager = notificationManager
         self.launchAtStartupManager = launchAtStartupManager
         self.userDefaults = userDefaults
@@ -70,6 +74,14 @@ final class UsageStore: ObservableObject {
         [claude, codex].filter { agentStatus(for: $0.provider).availability.showsInPopover }
     }
 
+    var popoverSnapshots: [ProviderSnapshot] {
+        let snapshots = visibleSnapshots
+        guard agentStatus(for: .codex).availability.showsInPopover else {
+            return snapshots
+        }
+        return snapshots + [codexSpark]
+    }
+
     var hasVisibleSnapshots: Bool {
         !visibleSnapshots.isEmpty
     }
@@ -81,22 +93,28 @@ final class UsageStore: ObservableObject {
 
         let previousClaude = claude
         let previousCodex = codex
+        let previousCodexSpark = codexSpark
 
         async let claudeSnapshot = claudeProbe.fetch()
         async let codexSnapshot = codexProbe.fetch()
+        async let codexSparkSnapshot = codexSparkProbe.fetch()
 
         let newClaude = await claudeSnapshot
         let newCodex = await codexSnapshot
+        let newCodexSpark = await codexSparkSnapshot
 
         let resolvedClaude = mergedSnapshot(previous: previousClaude, current: newClaude)
         let resolvedCodex = mergedSnapshot(previous: previousCodex, current: newCodex)
+        let resolvedCodexSpark = mergedSnapshot(previous: previousCodexSpark, current: newCodexSpark)
 
         claude = resolvedClaude
         codex = resolvedCodex
+        codexSpark = resolvedCodexSpark
         lastUpdated = Date()
 
         await notifyIfWindowRefreshed(previous: previousClaude, current: resolvedClaude)
         await notifyIfWindowRefreshed(previous: previousCodex, current: resolvedCodex)
+        await notifyIfWindowRefreshed(previous: previousCodexSpark, current: resolvedCodexSpark)
     }
 
     func setAutoRefreshInterval(_ interval: AutoRefreshInterval) {
@@ -181,8 +199,8 @@ final class UsageStore: ObservableObject {
         switch provider {
         case .claude:
             return classifyClaudeStatus(message: message)
-        case .codex:
-            return classifyCodexStatus(message: message)
+        case .codex, .codexSpark:
+            return classifyCodexStatus(provider: provider, message: message)
         }
     }
 
@@ -252,6 +270,8 @@ final class UsageStore: ObservableObject {
             return claude
         case .codex:
             return codex
+        case .codexSpark:
+            return codexSpark
         }
     }
 
@@ -320,18 +340,18 @@ final class UsageStore: ObservableObject {
         return AgentStatus(provider: .claude, availability: .error(message), message: message)
     }
 
-    private func classifyCodexStatus(message: String) -> AgentStatus {
+    private func classifyCodexStatus(provider: ProviderKind, message: String) -> AgentStatus {
         let normalized = message.lowercased()
 
         if normalized.contains("not installed or not on path") {
-            return AgentStatus(provider: .codex, availability: .notInstalled, message: message)
+            return AgentStatus(provider: provider, availability: .notInstalled, message: message)
         }
         if normalized.contains("not logged in")
             || normalized.contains("please log in") {
-            return AgentStatus(provider: .codex, availability: .notLoggedIn, message: message)
+            return AgentStatus(provider: provider, availability: .notLoggedIn, message: message)
         }
 
-        return AgentStatus(provider: .codex, availability: .error(message), message: message)
+        return AgentStatus(provider: provider, availability: .error(message), message: message)
     }
 
     private func startRefreshLoop() {

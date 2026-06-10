@@ -13,6 +13,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
             codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             userDefaults: defaults,
             startRefreshLoop: false
@@ -23,8 +24,37 @@ struct UsageStoreTests {
         #expect(store.agentStatus(for: ProviderKind.claude).availability == AgentAvailability.available)
         #expect(store.agentStatus(for: ProviderKind.codex).availability == AgentAvailability.notInstalled)
         #expect(store.visibleSnapshots.map { $0.provider } == [ProviderKind.claude])
+        #expect(store.popoverSnapshots.map { $0.provider } == [ProviderKind.claude])
         #expect(store.hasVisibleSnapshots)
         #expect(store.menuBarTitle == "Cl 15/45  Cx --/--")
+    }
+
+    @Test
+    @MainActor
+    func popoverSnapshotsAppendSparkOnlyWhenCodexIsVisible() {
+        let suiteName = UUID().uuidString
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = UsageStore(
+            claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
+            codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
+            notificationManager: NotificationManagerSpy(),
+            userDefaults: defaults,
+            startRefreshLoop: false
+        )
+        store.claude = makeSnapshot(.claude, fiveHourUsed: 15, weeklyUsed: 45)
+        store.codex = makeSnapshot(.codex, fiveHourUsed: 10, weeklyUsed: 20)
+        store.codexSpark = makeSnapshot(.codexSpark, fiveHourUsed: 1, weeklyUsed: 5)
+
+        #expect(store.popoverSnapshots.map { $0.provider } == [.claude, .codex, .codexSpark])
+        #expect(store.visibleSnapshots.map { $0.provider } == [.claude, .codex])
+        #expect(store.menuBarTitle == "Cl 15/45  Cx 10/20")
+
+        store.codex = makeSnapshot(.codex, fiveHourMessage: "Codex is not installed or not on PATH.", weeklyMessage: "Codex is not installed or not on PATH.")
+
+        #expect(store.popoverSnapshots.map { $0.provider } == [.claude])
     }
 
     @Test
@@ -45,6 +75,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: claudeQueue),
             codexProbe: ProbeStub(queue: codexQueue),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             userDefaults: defaults,
             startRefreshLoop: false
@@ -80,6 +111,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: claudeQueue),
             codexProbe: ProbeStub(queue: codexQueue),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             userDefaults: defaults,
             startRefreshLoop: false
@@ -120,6 +152,7 @@ struct UsageStoreTests {
             codexProbe: ProbeStub(queue: ProbeQueue([
                 makeSnapshot(.codex, fiveHourUsed: 10, weeklyUsed: 20),
             ])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: notificationManager,
             userDefaults: defaults,
             startRefreshLoop: false
@@ -143,6 +176,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
             codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: notificationManager,
             userDefaults: defaults,
             startRefreshLoop: false
@@ -180,6 +214,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
             codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: notificationManager,
             userDefaults: defaults,
             startRefreshLoop: false
@@ -204,6 +239,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
             codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             userDefaults: defaults,
             startRefreshLoop: false
@@ -234,6 +270,7 @@ struct UsageStoreTests {
                 snapshot: makeSnapshot(.codex, fiveHourUsed: 30, weeklyUsed: 40),
                 counter: codexCounter
             ),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             userDefaults: defaults,
             startRefreshLoop: true
@@ -272,6 +309,7 @@ struct UsageStoreTests {
                 snapshot: makeSnapshot(.codex, fiveHourUsed: 30, weeklyUsed: 40),
                 counter: codexCounter
             ),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             userDefaults: defaults,
             startRefreshLoop: true
@@ -306,6 +344,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
             codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: notificationManager,
             userDefaults: defaults,
             startRefreshLoop: false
@@ -332,6 +371,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
             codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             launchAtStartupManager: launchManager,
             userDefaults: defaults,
@@ -368,6 +408,7 @@ struct UsageStoreTests {
         let store = UsageStore(
             claudeProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.claude)])),
             codexProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codex)])),
+            codexSparkProbe: ProbeStub(queue: ProbeQueue([ProviderSnapshot.loading(.codexSpark)])),
             notificationManager: NotificationManagerSpy(),
             launchAtStartupManager: launchManager,
             userDefaults: defaults,

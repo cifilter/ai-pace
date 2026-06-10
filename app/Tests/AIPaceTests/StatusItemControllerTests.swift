@@ -10,6 +10,7 @@ struct StatusItemControllerTests {
         #expect(StatusItemController.popoverHeight(forVisibleSnapshotCount: 0) == 220)
         #expect(StatusItemController.popoverHeight(forVisibleSnapshotCount: 1) == 250)
         #expect(StatusItemController.popoverHeight(forVisibleSnapshotCount: 2) == 380)
-        #expect(StatusItemController.popoverHeight(forVisibleSnapshotCount: 5) == 380)
+        #expect(StatusItemController.popoverHeight(forVisibleSnapshotCount: 3) == 510)
+        #expect(StatusItemController.popoverHeight(forVisibleSnapshotCount: 5) == 510)
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 struct CodexProbe: Sendable {
     func fetch() async -> ProviderSnapshot {
         do {
-            let limits = try await fetchRateLimits()
+            let limits = try await fetchRateLimits().codex
             return ProviderSnapshot(
                 provider: .codex,
                 fiveHour: UsageWindow(
@@ -30,7 +30,44 @@ struct CodexProbe: Sendable {
         }
     }
 
-    private func fetchRateLimits() async throws -> CodexRateLimits {
+    func fetchSpark() async -> ProviderSnapshot {
+        do {
+            let response = try await fetchRateLimits()
+            guard let limits = response.spark else {
+                return ProviderSnapshot(
+                    provider: .codexSpark,
+                    fiveHour: UsageWindow(kind: .fiveHour, usedPercentage: nil, resetsAt: nil, message: "No Spark 5h limit returned."),
+                    weekly: UsageWindow(kind: .weekly, usedPercentage: nil, resetsAt: nil, message: "No Spark weekly limit returned."),
+                    detail: nil
+                )
+            }
+            return ProviderSnapshot(
+                provider: .codexSpark,
+                fiveHour: UsageWindow(
+                    kind: .fiveHour,
+                    usedPercentage: limits.primary?.usedPercent,
+                    resetsAt: limits.primary?.resetsAt,
+                    message: limits.primary == nil ? "No Spark 5h limit returned." : nil
+                ),
+                weekly: UsageWindow(
+                    kind: .weekly,
+                    usedPercentage: limits.secondary?.usedPercent,
+                    resetsAt: limits.secondary?.resetsAt,
+                    message: limits.secondary == nil ? "No Spark weekly limit returned." : nil
+                ),
+                detail: limits.planType.map { "Plan: \($0)" }
+            )
+        } catch {
+            return ProviderSnapshot(
+                provider: .codexSpark,
+                fiveHour: UsageWindow(kind: .fiveHour, usedPercentage: nil, resetsAt: nil, message: error.localizedDescription),
+                weekly: UsageWindow(kind: .weekly, usedPercentage: nil, resetsAt: nil, message: error.localizedDescription),
+                detail: nil
+            )
+        }
+    }
+
+    private func fetchRateLimits() async throws -> CodexRateLimitsResponse {
         guard let executable = ProcessRunner.which("codex") else {
             throw ProcessRunnerError.executableNotFound("codex")
         }
@@ -95,11 +132,40 @@ struct CodexProbe: Sendable {
             throw ProcessRunnerError.invalidResponse("Codex rate limit response was missing result.rateLimits.")
         }
 
+        return CodexRateLimitsResponse(
+            codex: parseRateLimits(rateLimits),
+            spark: parseSparkRateLimits(payload["result"])
+        )
+    }
+
+    func parseRateLimits(_ value: Any?) -> CodexRateLimits {
+        guard let rateLimits = value as? [String: Any] else {
+            return CodexRateLimits(primary: nil, secondary: nil, planType: nil, limitName: nil)
+        }
         return CodexRateLimits(
             primary: parseWindow(rateLimits["primary"]),
             secondary: parseWindow(rateLimits["secondary"]),
-            planType: rateLimits["planType"] as? String
+            planType: rateLimits["planType"] as? String,
+            limitName: rateLimits["limitName"] as? String
         )
+    }
+
+    func parseSparkRateLimits(_ value: Any?) -> CodexRateLimits? {
+        guard
+            let result = value as? [String: Any],
+            let limitsByID = result["rateLimitsByLimitId"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        for (limitID, rawLimits) in limitsByID {
+            let limits = parseRateLimits(rawLimits)
+            let name = limits.limitName?.lowercased() ?? ""
+            if name.contains("spark") || limitID.lowercased().contains("spark") {
+                return limits
+            }
+        }
+        return nil
     }
 
     func parseWindow(_ value: Any?) -> CodexRateLimitWindow? {
@@ -129,10 +195,22 @@ struct CodexProbe: Sendable {
     }
 }
 
+struct CodexSparkProbe: ProviderSnapshotFetching {
+    func fetch() async -> ProviderSnapshot {
+        await CodexProbe().fetchSpark()
+    }
+}
+
+struct CodexRateLimitsResponse {
+    let codex: CodexRateLimits
+    let spark: CodexRateLimits?
+}
+
 struct CodexRateLimits {
     let primary: CodexRateLimitWindow?
     let secondary: CodexRateLimitWindow?
     let planType: String?
+    let limitName: String?
 }
 
 struct CodexRateLimitWindow: Sendable, Equatable {

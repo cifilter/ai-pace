@@ -59,9 +59,9 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
     }
 
     private func bindStore() {
-        Publishers.CombineLatest(store.$claude, store.$codex)
+        Publishers.CombineLatest3(store.$claude, store.$codex, store.$codexSpark)
             .receive(on: RunLoop.main)
-            .sink { [weak self] _, _ in
+            .sink { [weak self] _, _, _ in
                 self?.updateButtonTitle()
                 self?.updatePopoverLayout()
             }
@@ -142,7 +142,7 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
     }
 
     private func popoverHeight() -> CGFloat {
-        Self.popoverHeight(forVisibleSnapshotCount: store.visibleSnapshots.count)
+        Self.popoverHeight(forVisibleSnapshotCount: store.popoverSnapshots.count)
     }
 
     static func popoverHeight(forVisibleSnapshotCount count: Int) -> CGFloat {
@@ -151,8 +151,10 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
             return 220
         case 1:
             return 250
-        default:
+        case 2:
             return 380
+        default:
+            return 510
         }
     }
 
